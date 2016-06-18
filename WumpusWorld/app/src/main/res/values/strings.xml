@@ -1,4 +1,9 @@
 <resources>
     <string name="app_name">WumpusWorld</string>
-    <string name="title_activity_main">Main</string>
+    <string name="app_title">Wumpus World</string>
+    <string name="title_activity_main">WumpusWorld</string>
+    <string name="nickname">Nickname</string>
+    <string name="resume">Resume</string>
+    <string name="start">Start New Game</string>
+    <string name="end">End</string>
 </resources>
