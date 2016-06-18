@@ -83,14 +83,15 @@ class LocationController < ApplicationController
       player = Player.find_by_name(nickname)
       state = player.state
 
+      player.update(arrow: player.arrow - 1)
       if state[pos] == 'W'
         state[pos] = '0'
 
         player.update(state: state)
 
-        render json: { status: 0, data: parse_states(player.state) }
+        render json: { status: 0, data: parse_states(player.state), arrow: player.arrow }
       else
-        render json: { status: 1, data: parse_states(player.state) }
+        render json: { status: 1, data: parse_states(player.state), arrow: player.arrow }
       end
     end
   end
