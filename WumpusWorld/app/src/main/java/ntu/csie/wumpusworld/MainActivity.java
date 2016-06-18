@@ -65,10 +65,11 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     private LocationManager mLocationManager;
     private double latitude, longitude;
     private final long LOCATION_UPDATE_MIN_TIME = 0;
-    private final float LOCATION_UPDATE_MIN_DISTANCE = 0;
+    private final float LOCATION_UPDATE_MIN_DISTANCE = 10;
 
     private Vector positions;
     private Position lastPosition;
+    private int now_pos, shoot_pos;
 
     private final int MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
 
@@ -127,7 +128,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         goButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-
+                goPosition();
             }
         });
 
@@ -135,7 +136,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         shootButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-
+                shootPosition();
             }
         });
     }
@@ -191,7 +192,6 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         mMap.setOnMyLocationButtonClickListener(new GoogleMap.OnMyLocationButtonClickListener() {
             @Override
             public boolean onMyLocationButtonClick() {
-                Log.v("Location", latitude + " " + longitude);
                 return false;
             }
         });
@@ -205,14 +205,26 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
             @Override
             public View getInfoContents(Marker marker) {
-                Log.v("id", marker.getId());
+                int id = Integer.parseInt(marker.getId().replace('m', ' ').trim());
 
                 View v = getLayoutInflater().inflate(R.layout.infolayout, null);
 
                 LatLng latLng = marker.getPosition();
-
                 TextView title = (TextView) v.findViewById(R.id.info_title);
                 title.setText(marker.getTitle());
+
+                Position p = (Position) positions.get(id);
+                if (p.is_wind())
+                    v.findViewById(R.id.wind).setVisibility(View.VISIBLE);
+                if (p.is_smell())
+                    v.findViewById(R.id.smell).setVisibility(View.VISIBLE);
+                if (p.is_shootable()) {
+                    findViewById(R.id.shoot).setEnabled(true);
+                    shoot_pos = id;
+                } else {
+                    findViewById(R.id.shoot).setEnabled(false);
+                }
+
                 return v;
             }
         });
@@ -241,6 +253,18 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onProviderDisabled(String s) {
 
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION: {
+                if (permissions.length == 1 && permissions[0] == Manifest.permission.ACCESS_FINE_LOCATION && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    mMap.setMyLocationEnabled(true);
+                }
+                return;
+            }
+        }
     }
 
     private void requestLocationUpdates() {
@@ -291,8 +315,13 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                         if (positions != null) {
                             if (lastPosition != null)
                                 lastPosition.setVisiable(false);
-                            Position p = (Position) positions.get(json.get("data").getAsInt());
+                            now_pos = json.get("data").getAsInt();
+                            Position p = (Position) positions.get(now_pos);
                             p.setVisiable(true);
+                            p.showInfo();
+                            if (p.is_goable())
+                                findViewById(R.id.go).setEnabled(true);
+
                             lastPosition = p;
                         }
 
@@ -431,12 +460,13 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                         setNicknameViewError(getString(R.string.error_try_again));
                         return;
                     }
-                    int status = json.get("status").getAsInt();
 
+                    int status = json.get("status").getAsInt();
                     switch (status) {
                         case 0:
                             currentView = 2;
                             switchView(currentView);
+                            redrawPositions(json.get("data").getAsJsonArray());
                             break;
                         case 1:
                             currentView = 3;
@@ -470,22 +500,91 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         return nickname.length() > 0;
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
-        switch (requestCode) {
-            case MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION: {
-                if (permissions.length == 1 && permissions[0] == Manifest.permission.ACCESS_FINE_LOCATION && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    mMap.setMyLocationEnabled(true);
+    private void goPosition() {
+        new AsyncTask<Void, Void, JsonObject>() {
+            @Override
+            protected JsonObject doInBackground(Void... voids) {
+                OkHttpClient client = new OkHttpClient();
+                Request request = new Request.Builder()
+                        .url(hostname + "go/" + nickname + "/" + now_pos)
+                        .build();
+
+                try {
+                    Response response = client.newCall(request).execute();
+                    return new JsonParser().parse(response.body().string()).getAsJsonObject();
+                } catch (IOException e) {
+                    return null;
                 }
-                return;
             }
-        }
+
+            @Override
+            protected void onPostExecute(final JsonObject json) {
+                if (json == null) {
+                    return;
+                }
+
+                int status = json.get("status").getAsInt();
+                switch (status) {
+                    case 0:
+                        redrawPositions(json.getAsJsonArray("data"));
+                        break;
+                    case 1:
+                        int id = json.get("pos").getAsInt();
+                        Position p = (Position) positions.get(id);
+                        if (json.get("code").getAsInt() == 0) {
+                            p.setWumpus();
+                        } else {
+                            p.setPit();
+                        }
+
+                        findViewById(R.id.go).setEnabled(false);
+                        findViewById(R.id.shoot).setEnabled(false);
+                        break;
+                }
+            }
+        }.execute();
+    }
+
+    private void shootPosition() {
+        new AsyncTask<Void, Void, JsonObject>() {
+            @Override
+            protected JsonObject doInBackground(Void... voids) {
+                OkHttpClient client = new OkHttpClient();
+                Request request = new Request.Builder()
+                        .url(hostname + "shoot/" + nickname + "/" + shoot_pos)
+                        .build();
+
+                try {
+                    Response response = client.newCall(request).execute();
+                    return new JsonParser().parse(response.body().string()).getAsJsonObject();
+                } catch (IOException e) {
+                    return null;
+                }
+            }
+
+            @Override
+            protected void onPostExecute(final JsonObject json) {
+                if (json == null) {
+                    return;
+                }
+
+                int status = json.get("status").getAsInt();
+                switch (status) {
+                    case 0:
+                        redrawPositions(json.getAsJsonArray("data"));
+                        break;
+                    case 1:
+                        break;
+                }
+            }
+        }.execute();
     }
 
     private class Position {
 
         private final String title;
         private final double latitude, longitude;
+        private boolean is_wind = false, is_smell = false, is_goable = false, is_shootable = false;
         private Marker marker;
         private Circle circle;
 
@@ -493,7 +592,6 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             this.title = json.get("title").getAsString();
             this.latitude = json.get("latitude").getAsDouble();
             this.longitude = json.get("longitude").getAsDouble();
-
             this.addMarker();
             this.addCircle();
         }
@@ -523,6 +621,22 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             }
         }
 
+        public boolean is_wind() {
+            return this.is_wind;
+        }
+
+        public boolean is_smell() {
+            return this.is_smell;
+        }
+
+        public boolean is_goable() {
+            return this.is_goable;
+        }
+
+        public boolean is_shootable() {
+            return this.is_shootable;
+        }
+
         public double getLatitude() {
             return this.latitude;
         }
@@ -535,20 +649,42 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             this.circle.setVisible(isVisable);
         }
 
+        public void showInfo() {
+            this.marker.showInfoWindow();
+        }
+
         public void setCurrent() {
             this.marker.setIcon(BitmapDescriptorFactory.fromResource(R.drawable.current));
+            //this.marker.hideInfoWindow();
+            this.marker.showInfoWindow();
         }
 
         public void setChecked() {
             this.marker.setIcon(BitmapDescriptorFactory.fromResource(R.drawable.checked));
         }
 
+        public void setPit() {
+            this.marker.setIcon(BitmapDescriptorFactory.fromResource(R.drawable.pit));
+        }
+
+        public void setWumpus() {
+            this.marker.setIcon(BitmapDescriptorFactory.fromResource(R.drawable.wumpus));
+        }
+
         public void setWind() {
-            findViewById(R.id.wind).setVisibility(View.VISIBLE);
+            this.is_wind = true;
         }
 
         public void setSmell() {
-            findViewById(R.id.smell).setVisibility(View.VISIBLE);
+            this.is_smell = true;
+        }
+
+        public void setGoable() {
+            this.is_goable = true;
+        }
+
+        public void setShootable(boolean value) {
+            this.is_shootable = value;
         }
     }
 
@@ -573,15 +709,19 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             JsonObject jobject = jelement.getAsJsonObject();
 
             Position p = (Position) positions.get(num);
-            if (jobject.get("is_current").getAsBoolean())
-                p.setCurrent();
-            else if (jobject.get("is_checked").getAsBoolean())
-                p.setChecked();
 
             if (jobject.get("is_wind").getAsBoolean())
                 p.setWind();
             if (jobject.get("is_smell").getAsBoolean())
                 p.setSmell();
+            if (jobject.get("can_go").getAsBoolean())
+                p.setGoable();
+            p.setShootable(jobject.get("can_shoot").getAsBoolean());
+
+            if (jobject.get("is_current").getAsBoolean())
+                p.setCurrent();
+            else if (jobject.get("is_checked").getAsBoolean())
+                p.setChecked();
 
             num++;
         }

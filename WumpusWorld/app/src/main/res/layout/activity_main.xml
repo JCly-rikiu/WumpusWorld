@@ -43,7 +43,8 @@
                     android:gravity="center_horizontal|center_vertical"
                     android:text="@string/go"
                     android:layout_weight="1"
-                    android:alpha="0.85" />
+                    android:alpha="0.85"
+                    android:enabled="false" />
 
                 <View
                     android:id="@+id/VerticalLine"
@@ -58,7 +59,8 @@
                     android:gravity="center_horizontal|center_vertical"
                     android:text="@string/shoot"
                     android:layout_weight="1"
-                    android:alpha="0.85" />
+                    android:alpha="0.85"
+                    android:enabled="false" />
             </LinearLayout>
 
             <Button
