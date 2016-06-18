@@ -9,6 +9,8 @@ Rails.application.routes.draw do
 
   # location
   post 'location/:nickname' => 'location#location'
+  get 'go/:nickname/:pos' => 'location#go'
+  get 'shoot/:nickname/:pos' => 'location#shoot'
 
   # You can have the root of your site routed with "root"
   # root 'welcome#index'

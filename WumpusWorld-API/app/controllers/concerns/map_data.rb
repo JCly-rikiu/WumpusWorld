@@ -253,4 +253,57 @@ module Map_data
     @@positions
   end
 
+  def parse_states(states)
+    rnt = []
+
+    num = -1
+    states.length.times do
+      num += 1
+      char = states[num]
+
+      checked = (char == '1' ? true : false)
+      current = (char == 'C' ? true : false)
+
+      wind = checked || current ? check_wind(num, states) : false
+      smell = checked || current ? check_smell(num, states) : false
+      go = checked || current ? true : check_go(num, states)
+      shoot = checked || current ? false : check_shoot(num, states)
+
+      rnt.push({ is_checked: checked, is_current: current, is_wind: wind, is_smell: smell, can_go: go, can_shoot: shoot })
+    end
+
+    rnt
+  end
+
+  def check_wind(num, states)
+    get_positions[num][:connect].each do |num|
+      return true if states[num[:number]] == 'P'
+    end
+
+    false
+  end
+
+  def check_smell(num, states)
+    get_positions[num][:connect].each do |num|
+      return true if states[num[:number]] == 'W'
+    end
+
+    false
+  end
+
+  def check_go(num, states)
+    get_positions[num][:connect].each do |num|
+      return true if states[num[:number]] == '1'
+    end
+
+    false
+  end
+
+  def check_shoot(num, states)
+    get_positions[num][:connect].each do |num|
+      return true if states[num[:number]] == 'C'
+    end
+
+    false
+  end
 end

@@ -20,8 +20,8 @@ class StarterController < ApplicationController
   def start
     nickname = params[:nickname]
     if Player.exists?(name: nickname)
-      player = Player.find_by_name(name: nickname)
-      player.update(map: create_new_game)
+      player = Player.find_by_name(nickname)
+      player.update(is_playing: true, state: create_new_game)
       render json: { status: 0, data: parse_states(player.state) }
     else
       player = Player.create(name: nickname, is_playing: true, state: create_new_game)
@@ -32,42 +32,6 @@ class StarterController < ApplicationController
   private
 
   def create_new_game
-    '000000000000000000000000'
-  end
-
-  def parse_states(states)
-    rnt = []
-
-    num = -1
-    states.length.times do
-      num += 1
-      char = states[num]
-
-      checked = (char == '1' ? true : false)
-      current = (char == 'C' ? true : false)
-
-      wind = check_wind(num, states)
-      smell = check_smell(num, states)
-
-      rnt.push({ is_checked: checked, is_current: current, is_wind: wind, is_smell: smell })
-    end
-
-    rnt
-  end
-
-  def check_wind(num, states)
-    get_positions[num][:connect].each do |num|
-      return true if states[num[:number]] == 'P'
-    end
-
-    false
-  end
-
-  def check_smell(num, states)
-    get_positions[num][:connect].each do |num|
-      return true if states[num[:number]] == 'W'
-    end
-
-    false
+    '00P0010P01000C000W0W00P0'
   end
 end
