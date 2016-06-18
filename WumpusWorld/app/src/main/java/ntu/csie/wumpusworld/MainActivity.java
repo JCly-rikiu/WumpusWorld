@@ -3,6 +3,7 @@ package ntu.csie.wumpusworld;
 import android.*;
 import android.Manifest;
 import android.app.Service;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.PorterDuff;
 import android.location.Location;
@@ -10,11 +11,13 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.IBinder;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -30,6 +33,8 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.maps.model.StreetViewPanoramaCamera;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -50,14 +55,11 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
     private String hostname;
 
-    private enum Action {
-        INIT, RESUME, START, UPDATE, GO, SHOOT
-    }
-
     private String nickname;
 
     private View progressView, gameView, homeView;
     private TextView nicknameView;
+    private int currentView = 3;
 
     private GoogleMap mMap;
     private LocationManager mLocationManager;
@@ -82,6 +84,8 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         progressView = findViewById(R.id.progress);
         gameView = findViewById(R.id.game);
         homeView = findViewById(R.id.home);
+
+        switchView(currentView);
 
         nicknameView = (TextView) findViewById(R.id.nickname);
 
@@ -125,6 +129,8 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 homeView.setVisibility(View.GONE);
                 break;
             case 2:
+                InputMethodManager mInputMethodManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                mInputMethodManager.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
                 progressView.setVisibility(View.GONE);
                 gameView.setVisibility(View.VISIBLE);
                 homeView.setVisibility(View.GONE);
@@ -168,8 +174,28 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             }
         });
 
+        mMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter() {
+
+            @Override
+            public View getInfoWindow(Marker marker) {
+                return null;
+            }
+
+            @Override
+            public View getInfoContents(Marker marker) {
+                Log.v("id", marker.getId());
+
+                View v = getLayoutInflater().inflate(R.layout.infolayout, null);
+
+                LatLng latLng = marker.getPosition();
+
+                TextView title = (TextView) v.findViewById(R.id.info_title);
+                title.setText(marker.getTitle());
+                return v;
+            }
+        });
+
         init();
-        switchView(2);
 
         LatLng ntu = new LatLng(25.0173405, 121.5397518);
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(ntu, 15));
@@ -209,8 +235,8 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         latitude = location.getLatitude();
         longitude = location.getLongitude();
 
-//        if (nickname == null)
-//            return;
+        if (nickname == null)
+            return;
 
         new AsyncTask<Void, Void, JsonObject>() {
             @Override
@@ -236,8 +262,8 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 if (json == null) {
                     return;
                 }
-                int status = json.get("status").getAsInt();
 
+                int status = json.get("status").getAsInt();
                 switch (status) {
                     case 0:
                         if (positions != null) {
@@ -282,8 +308,8 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                     finish();
                     return;
                 }
-                int status = json.get("status").getAsInt();
 
+                int status = json.get("status").getAsInt();
                 switch (status) {
                     case 0:
                         initPositions(json.getAsJsonArray("data"));
@@ -296,20 +322,58 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         }.execute();
     }
 
-    private void initPositions(JsonArray jarray) {
-        positions = new Vector();
-
-        for (JsonElement jelement: jarray) {
-            positions.add(new Position(jelement.getAsJsonObject()));
-        }
-    }
-
     private void resume() {
         setNickname();
 
         if (isNicknameValid(nickname)) {
-            switchView(1);
-            new StartMenuTask(Action.RESUME).execute();
+            currentView = 1;
+            switchView(currentView);
+            new AsyncTask<Void, Void, JsonObject>() {
+                @Override
+                protected JsonObject doInBackground(Void... voids) {
+                    OkHttpClient client = new OkHttpClient();
+                    Request request = new Request.Builder()
+                            .url(hostname + "resume/" + nickname)
+                            .build();
+
+                    try {
+                        Response response = client.newCall(request).execute();
+                        return new JsonParser().parse(response.body().string()).getAsJsonObject();
+                    } catch (IOException e) {
+                        return null;
+                    }
+                }
+
+                @Override
+                protected void onPostExecute(final JsonObject json) {
+                    if (json == null) {
+                        currentView = 3;
+                        switchView(currentView);
+                        setNicknameViewError(getString(R.string.error_try_again));
+                        return;
+                    }
+
+                    int status = json.get("status").getAsInt();
+                    switch (status) {
+                        case 0:
+                            currentView = 2;
+                            switchView(currentView);
+                            redrawPositions(json.getAsJsonArray("data"));
+                            break;
+                        case 1:
+                            currentView = 3;
+                            switchView(currentView);
+                            setNicknameViewError(getString(R.string.error_no_game));
+                            break;
+                    }
+                }
+
+                @Override
+                protected void onCancelled() {
+                    currentView = 3;
+                    switchView(currentView);
+                }
+            }.execute();
         } else {
             setNicknameViewError(getString(R.string.error_no_name));
         }
@@ -319,8 +383,52 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         setNickname();
 
         if (isNicknameValid(nickname)) {
-            switchView(1);
-            new StartMenuTask(Action.START).execute();
+            currentView = 1;
+            switchView(currentView);
+            new AsyncTask<Void, Void, JsonObject>() {
+                @Override
+                protected JsonObject doInBackground(Void... voids) {
+                    OkHttpClient client = new OkHttpClient();
+                    Request request = new Request.Builder()
+                            .url(hostname + "start/" + nickname)
+                            .build();
+
+                    try {
+                        Response response = client.newCall(request).execute();
+                        return new JsonParser().parse(response.body().string()).getAsJsonObject();
+                    } catch (IOException e) {
+                        return null;
+                    }
+                }
+
+                @Override
+                protected void onPostExecute(final JsonObject json) {
+                    if (json == null) {
+                        currentView = 3;
+                        switchView(currentView);
+                        setNicknameViewError(getString(R.string.error_try_again));
+                        return;
+                    }
+                    int status = json.get("status").getAsInt();
+
+                    switch (status) {
+                        case 0:
+                            currentView = 2;
+                            switchView(currentView);
+                            break;
+                        case 1:
+                            currentView = 3;
+                            switchView(currentView);
+                            break;
+                    }
+                }
+
+                @Override
+                protected void onCancelled() {
+                    currentView = 3;
+                    switchView(currentView);
+                }
+            }.execute();
         } else {
             setNicknameViewError(getString(R.string.error_no_name));
         }
@@ -349,71 +457,6 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 }
                 return;
             }
-        }
-    }
-
-    public class StartMenuTask extends AsyncTask<Void, Void, JsonObject> {
-
-        private final Action action;
-
-        StartMenuTask(Action action) {
-            this.action = action;
-        }
-
-        @Override
-        protected JsonObject doInBackground(Void... params) {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
-            OkHttpClient client = new OkHttpClient();
-            Request request = null;
-
-            switch (action) {
-                case RESUME:
-                    request = new Request.Builder()
-                            .url(hostname + "resume/" + nickname)
-                            .build();
-                    break;
-                case START:
-                    request = new Request.Builder()
-                            .url(hostname + "start/" + nickname)
-                            .build();
-                    break;
-            }
-
-            try {
-                Response response = client.newCall(request).execute();
-                return new JsonParser().parse(response.body().string()).getAsJsonObject();
-            } catch (IOException e) {
-                return null;
-            }
-        }
-
-        @Override
-        protected void onPostExecute(final JsonObject json) {
-            if (json == null) {
-                switchView(3);
-                setNicknameViewError(getString(R.string.error_try_again));
-                return;
-            }
-            int status = json.get("status").getAsInt();
-
-            switch (status) {
-                case 0:
-                    break;
-                case 1:
-                    switchView(3);
-                    setNicknameViewError(getString(R.string.error_no_game));
-                    break;
-            }
-        }
-
-        @Override
-        protected void onCancelled() {
-            switchView(3);
         }
     }
 
@@ -447,8 +490,78 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                     .visible(false));
         }
 
+        public void addLine(JsonObject json) {
+            for (JsonElement jelement: json.getAsJsonArray("connect")) {
+                int num = jelement.getAsJsonObject().get("number").getAsInt();
+                Position p = (Position) positions.get(num);
+
+                mMap.addPolyline(new PolylineOptions()
+                        .add(new LatLng(this.latitude, this.longitude))
+                        .add(new LatLng(p.getLatitude(), p.getLongitude())));
+            }
+        }
+
+        public double getLatitude() {
+            return this.latitude;
+        }
+
+        public double getLongitude() {
+            return this.longitude;
+        }
+
         public void setVisiable(boolean isVisable) {
-            circle.setVisible(isVisable);
+            this.circle.setVisible(isVisable);
+        }
+
+        public void setCurrent() {
+            this.marker.setIcon(BitmapDescriptorFactory.fromResource(R.drawable.current));
+        }
+
+        public void setChecked() {
+            this.marker.setIcon(BitmapDescriptorFactory.fromResource(R.drawable.checked));
+        }
+
+        public void setWind() {
+            findViewById(R.id.wind).setVisibility(View.VISIBLE);
+        }
+
+        public void setSmell() {
+            findViewById(R.id.smell).setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void initPositions(JsonArray jarray) {
+        positions = new Vector();
+
+        for (JsonElement jelement: jarray) {
+            positions.add(new Position(jelement.getAsJsonObject()));
+        }
+
+        int num = 0;
+        for (JsonElement jelement: jarray) {
+            Position p = (Position) positions.get(num);
+            p.addLine(jelement.getAsJsonObject());
+            num++;
+        }
+    }
+
+    private void redrawPositions(JsonArray jarray) {
+        int num = 0;
+        for (JsonElement jelement : jarray) {
+            JsonObject jobject = jelement.getAsJsonObject();
+
+            Position p = (Position) positions.get(num);
+            if (jobject.get("is_current").getAsBoolean())
+                p.setCurrent();
+            else if (jobject.get("is_checked").getAsBoolean())
+                p.setChecked();
+
+            if (jobject.get("is_wind").getAsBoolean())
+                p.setWind();
+            if (jobject.get("is_smell").getAsBoolean())
+                p.setSmell();
+
+            num++;
         }
     }
 

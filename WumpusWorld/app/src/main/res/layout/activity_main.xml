@@ -27,6 +27,7 @@
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent">
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
@@ -43,6 +44,7 @@
                     android:text="@string/go"
                     android:layout_weight="1"
                     android:alpha="0.85" />
+
                 <View
                     android:id="@+id/VerticalLine"
                     android:layout_width="1dip"
@@ -70,6 +72,7 @@
                 android:text="Show Popup" />
 
         </RelativeLayout>
+
     </RelativeLayout>
 
     <LinearLayout
