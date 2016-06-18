@@ -7,6 +7,9 @@ Rails.application.routes.draw do
   get 'resume/:nickname' => 'starter#resume'
   get 'start/:nickname' => 'starter#start'
 
+  # location
+  post 'location/:nickname' => 'location#location'
+
   # You can have the root of your site routed with "root"
   # root 'welcome#index'
 
