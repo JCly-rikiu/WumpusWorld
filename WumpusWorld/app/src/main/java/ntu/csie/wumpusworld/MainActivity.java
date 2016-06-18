@@ -23,14 +23,19 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 import com.google.android.gms.maps.model.StreetViewPanoramaCamera;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import java.io.IOException;
+import java.util.Vector;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -54,6 +59,8 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     private double latitude, longitude;
     private final long LOCATION_UPDATE_MIN_TIME = 0;
     private final float LOCATION_UPDATE_MIN_DISTANCE = 0;
+
+    private Vector positions;
 
     private final int MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
 
@@ -226,6 +233,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
                 switch (status) {
                     case 0:
+                        initPositions(json.getAsJsonArray("data"));
                         break;
                     case 1:
                         finish();
@@ -233,6 +241,20 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 }
             }
         }.execute();
+    }
+
+    private void initPositions(JsonArray jarray) {
+        positions = new Vector();
+
+        for (JsonElement jelement: jarray) {
+            JsonObject jobject = jelement.getAsJsonObject();
+
+            String title = jobject.get("title").getAsString();
+            double la = jobject.get("latitude").getAsDouble();
+            double lo = jobject.get("longitude").getAsDouble();
+
+            positions.add(new Position(title, la, lo));
+        }
     }
 
     private void resume() {
@@ -332,6 +354,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             }
             int status = json.get("status").getAsInt();
 
+
             switch (status) {
                 case 0:
                     break;
@@ -345,6 +368,28 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         @Override
         protected void onCancelled() {
             //showProgress(false);
+        }
+    }
+
+    private class Position {
+
+        private final String title;
+        private final double latitude, longitude;
+        private Marker marker;
+
+        Position(String title, double latitude, double longitude) {
+            this.title = title;
+            this.latitude = latitude;
+            this.longitude = longitude;
+
+            this.addMarker();
+        }
+
+        private void addMarker() {
+            this.marker = mMap.addMarker(new MarkerOptions()
+                    .position(new LatLng(this.latitude, this.longitude))
+                    .title(this.title)
+                    .icon(BitmapDescriptorFactory.fromResource(R.drawable.new_pos)));
         }
     }
 }
