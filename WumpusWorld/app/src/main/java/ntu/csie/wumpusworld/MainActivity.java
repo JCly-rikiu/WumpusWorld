@@ -71,6 +71,8 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     private Position lastPosition;
     private int now_pos, shoot_pos;
 
+    private int arrow = 0;
+
     private final int MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
 
     public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
@@ -410,6 +412,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                             currentView = 2;
                             switchView(currentView);
                             redrawPositions(json.getAsJsonArray("data"));
+                            setArrow(json.get("arrow").getAsInt());
                             break;
                         case 1:
                             currentView = 3;
@@ -467,6 +470,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                             currentView = 2;
                             switchView(currentView);
                             redrawPositions(json.get("data").getAsJsonArray());
+                            setArrow(3);
                             break;
                         case 1:
                             currentView = 3;
@@ -572,8 +576,10 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 switch (status) {
                     case 0:
                         redrawPositions(json.getAsJsonArray("data"));
+                        setArrow(json.get("arrow").getAsInt());
                         break;
                     case 1:
+                        setArrow(json.get("arrow").getAsInt());
                         break;
                 }
             }
@@ -655,7 +661,6 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
         public void setCurrent() {
             this.marker.setIcon(BitmapDescriptorFactory.fromResource(R.drawable.current));
-            //this.marker.hideInfoWindow();
             this.marker.showInfoWindow();
         }
 
@@ -716,7 +721,10 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 p.setSmell();
             if (jobject.get("can_go").getAsBoolean())
                 p.setGoable();
-            p.setShootable(jobject.get("can_shoot").getAsBoolean());
+            if (arrow > 0)
+                p.setShootable(jobject.get("can_shoot").getAsBoolean());
+            else
+                p.setShootable(false);
 
             if (jobject.get("is_current").getAsBoolean())
                 p.setCurrent();
@@ -735,5 +743,11 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             this.latitude = latitude;
             this.longitude = longitude;
         }
+    }
+
+    private void setArrow(int remain) {
+        arrow = remain;
+        Button b = (Button) findViewById(R.id.shoot);
+        b.setText("Shoot (" + arrow + ")");
     }
 }
