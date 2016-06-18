@@ -89,8 +89,11 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
         nicknameView = (TextView) findViewById(R.id.nickname);
 
-        mLocationManager = (LocationManager) this.getSystemService(Service.LOCATION_SERVICE);
-        requestLocationUpdates();
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION}, MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
+        }
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -177,6 +180,9 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         } else {
             ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION}, MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
         }
+
+        mLocationManager = (LocationManager) this.getSystemService(Service.LOCATION_SERVICE);
+        requestLocationUpdates();
 
         mMap.getUiSettings().setZoomControlsEnabled(true);
         mMap.getUiSettings().setCompassEnabled(true);
