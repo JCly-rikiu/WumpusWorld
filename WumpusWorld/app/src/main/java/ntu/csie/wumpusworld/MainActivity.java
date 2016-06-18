@@ -24,11 +24,14 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.Circle;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 import com.google.android.gms.maps.model.StreetViewPanoramaCamera;
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -37,8 +40,10 @@ import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.util.Vector;
 
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class MainActivity extends FragmentActivity implements OnMapReadyCallback, LocationListener {
@@ -61,8 +66,11 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     private final float LOCATION_UPDATE_MIN_DISTANCE = 0;
 
     private Vector positions;
+    private Position lastPosition;
 
     private final int MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
+
+    public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,6 +117,25 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         });
     }
 
+    private void switchView(int viewnumber) {
+        switch (viewnumber) {
+            case 1:
+                progressView.setVisibility(View.VISIBLE);
+                gameView.setVisibility(View.GONE);
+                homeView.setVisibility(View.GONE);
+                break;
+            case 2:
+                progressView.setVisibility(View.GONE);
+                gameView.setVisibility(View.VISIBLE);
+                homeView.setVisibility(View.GONE);
+                break;
+            case 3:
+                progressView.setVisibility(View.GONE);
+                gameView.setVisibility(View.GONE);
+                homeView.setVisibility(View.VISIBLE);
+                break;
+        }
+    }
 
     /**
      * Manipulates the map once available.
@@ -146,8 +173,6 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
         LatLng ntu = new LatLng(25.0173405, 121.5397518);
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(ntu, 15));
-
-
     }
 
     @Override
@@ -183,28 +208,56 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     private void changeLocation(Location location) {
         latitude = location.getLatitude();
         longitude = location.getLongitude();
-        Log.v("location", latitude + " " + longitude);
+
+//        if (nickname == null)
+//            return;
+
+        new AsyncTask<Void, Void, JsonObject>() {
+            @Override
+            protected JsonObject doInBackground(Void... voids) {
+                OkHttpClient client = new OkHttpClient();
+
+                RequestBody requestBody = RequestBody.create(JSON, new Gson().toJson(new ActionPack(latitude, longitude)));
+                Request request = new Request.Builder()
+                        .url(hostname + "location/" + nickname)
+                        .post(requestBody)
+                        .build();
+
+                try {
+                    Response response = client.newCall(request).execute();
+                    return new JsonParser().parse(response.body().string()).getAsJsonObject();
+                } catch (IOException e) {
+                    return null;
+                }
+            }
+
+            @Override
+            protected void onPostExecute(final JsonObject json) {
+                if (json == null) {
+                    return;
+                }
+                int status = json.get("status").getAsInt();
+
+                switch (status) {
+                    case 0:
+                        if (positions != null) {
+                            if (lastPosition != null)
+                                lastPosition.setVisiable(false);
+                            Position p = (Position) positions.get(json.get("data").getAsInt());
+                            p.setVisiable(true);
+                            lastPosition = p;
+                        }
+
+                        break;
+                    case 1:
+                        if (lastPosition != null)
+                            lastPosition.setVisiable(false);
+                        break;
+                }
+            }
+        }.execute();
     }
 
-    private void switchView(int viewnumber) {
-        switch (viewnumber) {
-            case 1:
-                progressView.setVisibility(View.VISIBLE);
-                gameView.setVisibility(View.GONE);
-                homeView.setVisibility(View.GONE);
-                break;
-            case 2:
-                progressView.setVisibility(View.GONE);
-                gameView.setVisibility(View.VISIBLE);
-                homeView.setVisibility(View.GONE);
-                break;
-            case 3:
-                progressView.setVisibility(View.GONE);
-                gameView.setVisibility(View.GONE);
-                homeView.setVisibility(View.VISIBLE);
-                break;
-        }
-    }
 
     private void init() {
         new AsyncTask<Void, Void, JsonObject>() {
@@ -247,13 +300,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         positions = new Vector();
 
         for (JsonElement jelement: jarray) {
-            JsonObject jobject = jelement.getAsJsonObject();
-
-            String title = jobject.get("title").getAsString();
-            double la = jobject.get("latitude").getAsDouble();
-            double lo = jobject.get("longitude").getAsDouble();
-
-            positions.add(new Position(title, la, lo));
+            positions.add(new Position(jelement.getAsJsonObject()));
         }
     }
 
@@ -354,7 +401,6 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             }
             int status = json.get("status").getAsInt();
 
-
             switch (status) {
                 case 0:
                     break;
@@ -367,7 +413,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
         @Override
         protected void onCancelled() {
-            //showProgress(false);
+            switchView(3);
         }
     }
 
@@ -376,13 +422,15 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         private final String title;
         private final double latitude, longitude;
         private Marker marker;
+        private Circle circle;
 
-        Position(String title, double latitude, double longitude) {
-            this.title = title;
-            this.latitude = latitude;
-            this.longitude = longitude;
+        Position(JsonObject json) {
+            this.title = json.get("title").getAsString();
+            this.latitude = json.get("latitude").getAsDouble();
+            this.longitude = json.get("longitude").getAsDouble();
 
             this.addMarker();
+            this.addCircle();
         }
 
         private void addMarker() {
@@ -390,6 +438,27 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                     .position(new LatLng(this.latitude, this.longitude))
                     .title(this.title)
                     .icon(BitmapDescriptorFactory.fromResource(R.drawable.new_pos)));
+        }
+
+        private void addCircle() {
+            this.circle = mMap.addCircle(new CircleOptions()
+                    .center(new LatLng(this.latitude, this.longitude))
+                    .radius(25) // In meters
+                    .visible(false));
+        }
+
+        public void setVisiable(boolean isVisable) {
+            circle.setVisible(isVisable);
+        }
+    }
+
+    private class ActionPack {
+
+        private final double latitude, longitude;
+
+        ActionPack(double latitude, double longitude) {
+            this.latitude = latitude;
+            this.longitude = longitude;
         }
     }
 }
