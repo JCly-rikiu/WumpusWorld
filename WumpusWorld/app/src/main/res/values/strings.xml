@@ -6,4 +6,8 @@
     <string name="resume">Resume</string>
     <string name="start">Start New Game</string>
     <string name="end">End</string>
+    <string name="hostname">http://localhost:3000/</string>
+    <string name="error_no_name">"Enter your nickname."</string>
+    <string name="error_no_game">"Game dosen't exist."</string>
+    <string name="error_try_again">"Please try again."</string>
 </resources>
