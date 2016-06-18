@@ -119,6 +119,22 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 finish();
             }
         });
+
+        Button goButton = (Button) findViewById(R.id.go);
+        goButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+
+            }
+        });
+
+        Button shootButton = (Button) findViewById(R.id.shoot);
+        shootButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+
+            }
+        });
     }
 
     private void switchView(int viewnumber) {
