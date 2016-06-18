@@ -1,5 +1,22 @@
 class StarterController < ApplicationController
   def init
+    render json: { status: 0, data: [
+      {
+        latitude: 25.021651,
+        longitude: 121.535189,
+        title: '新體'
+      },
+      {
+        latitude: 25.020344,
+        longitude: 121.537628,
+        title: '醉月湖'
+      },
+      {
+        latitude: 25.020708,
+        longitude: 121.536405,
+        title: '游泳池'
+      },
+      ] }
   end
 
   def resume
