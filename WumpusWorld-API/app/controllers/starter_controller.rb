@@ -11,10 +11,13 @@ class StarterController < ApplicationController
 
     if Player.exists?(name: nickname)
       player = Player.find_by_name(nickname)
-      render json: { status: 0, data: parse_state(player.state), arrow: player.arrow }
-    else
-      render json: { status: 1 }
+      if player.is_playing
+        render json: { status: 0, data: parse_state(player.state), arrow: player.arrow }
+        return
+      end
     end
+
+    render json: { status: 1 }
   end
 
   def start
@@ -32,6 +35,6 @@ class StarterController < ApplicationController
   private
 
   def create_new_game
-    '00P0010P01000C000W0W00P0'
+    '00P0000P00000000CW0W00P0'
   end
 end

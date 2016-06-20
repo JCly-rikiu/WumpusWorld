@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
+import android.graphics.Rect;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -16,8 +17,11 @@ import android.os.IBinder;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
+import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -79,6 +83,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     private Vector eggCameras;
     private Circle eggCircle;
     private Vector eggLines;
+    private Marker eggMarker;
 
     private int arrow = 0;
 
@@ -160,8 +165,17 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 homeView.setVisibility(View.GONE);
                 break;
             case 2:
-                InputMethodManager mInputMethodManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                mInputMethodManager.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+                final View activityRootView = findViewById(R.id.home);
+                Rect r = new Rect();
+                //r will be populated with the coordinates of your view that area still visible.
+                activityRootView.getWindowVisibleDisplayFrame(r);
+
+                int heightDiff = activityRootView.getRootView().getHeight() - (r.bottom - r.top);
+                if (heightDiff > 300) {
+                    InputMethodManager mInputMethodManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    mInputMethodManager.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+                }
+
                 progressView.setVisibility(View.GONE);
                 gameView.setVisibility(View.VISIBLE);
                 homeView.setVisibility(View.GONE);
@@ -223,6 +237,9 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 LatLng latLng = marker.getPosition();
                 TextView title = (TextView) v.findViewById(R.id.info_title);
                 title.setText(marker.getTitle());
+
+                if (id > 23)
+                    return v;
 
                 Position p = (Position) positions.get(id);
                 if (p.is_wind())
@@ -295,10 +312,11 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         if (nickname == null)
             return;
 
-        if (lastPosition != null)
+        if (lastPosition != null) {
             lastPosition.setVisiable(false);
+            lastPosition.hideInfo();
+        }
         findViewById(R.id.go).setEnabled(false);
-        egg_mode = false;
 
         new AsyncTask<Void, Void, JsonObject>() {
             @Override
@@ -333,14 +351,34 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                             Position p = (Position) positions.get(now_pos);
                             p.setVisiable(true);
                             p.showInfo();
+                            CameraPosition cameraPosition = new CameraPosition.Builder()
+                                    .target(new LatLng(p.getLatitude(), p.getLongitude()))
+                                    .zoom(16)
+                                    .build();
+                            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+
                             if (p.is_goable())
                                 findViewById(R.id.go).setEnabled(true);
 
                             lastPosition = p;
                         }
 
-                        break;
                     case 1:
+                        if (egg_mode == true) {
+                            for (Object o: positions){
+                                Position p = (Position) o;
+                                p.egg_end();
+                            }
+
+                            eggCircle.setVisible(false);
+                            for (Object o: eggLines) {
+                                Polyline line = (Polyline) o;
+                                line.setVisible(false);
+                            }
+
+                            eggMarker.setVisible(false);
+                            egg_mode = false;
+                        }
                         break;
                     case 2:
                         egg_mode = true;
@@ -349,8 +387,6 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 }
             }
         }.execute();
-
-        activate_egg();
     }
 
 
@@ -685,6 +721,10 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             this.marker.showInfoWindow();
         }
 
+        public void hideInfo() {
+            this.marker.hideInfoWindow();
+        }
+
         public void setCurrent() {
             this.marker.setIcon(BitmapDescriptorFactory.fromResource(R.drawable.current));
             this.marker.showInfoWindow();
@@ -835,6 +875,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                     LatLng l = new LatLng(jobject.get("latitude").getAsDouble(), jobject.get("longitude").getAsDouble());
                     mMap.addMarker(new MarkerOptions()
                             .position(l)
+                            .title(jobject.get("title").getAsString())
                             .icon(BitmapDescriptorFactory.fromAsset("logo_mcd.png")));
 
                     eggCameras.add(new CameraPosition.Builder()
@@ -875,14 +916,15 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                         .strokeColor(Color.BLACK)
                         .fillColor(0x3FFFD700));
 
+                JsonObject title = json.get("title").getAsJsonObject();
+                eggMarker = mMap.addMarker(new MarkerOptions()
+                        .position(new LatLng(title.get("latitude").getAsDouble(), title.get("longitude").getAsDouble()))
+                        .icon(BitmapDescriptorFactory.fromAsset("ntu.png")));
+                eggMarker.setVisible(false);
+
                 eggCameraCB(0);
             }
         }.execute();
-
-//        for (Object o: positions){
-//            Position p = (Position) o;
-//            p.egg_end();
-//        }
     }
 
     private void eggCameraCB(final int num) {
@@ -895,6 +937,11 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
             CameraPosition cameraPosition = (CameraPosition) eggCameras.get(num);
             mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 3000, null);
+
+            mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+
+            eggMarker.setVisible(true);
+            showToast("台大国土錬成陣");
             return;
         }
 

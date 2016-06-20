@@ -30,24 +30,20 @@ class LocationController < ApplicationController
       end
     end
 
-    least_distance = 1000000
-    egg_pos = -1
-    cnt = -1
-    get_easter_eggs do |pos|
+    egg_pos = false
+    get_easter_eggs[:mac].each do |pos|
       distance = cal_distance(latitude, pos[:latitude], longitude, pos[:longitude])
 
       next if distance > 0.0005
-      if distance < least_distance
-        least_distance = distance
-        egg_pos = cnt
-      end
+      egg_pos = true
+      break
     end
 
     if rnt_pos == -1
-      if egg_pos == -1
-        render json: { status: 1 }
-      else
+      if egg_pos
         render json: { status: 2 }
+      else
+        render json: { status: 1 }
       end
     else
       render json: { status: 0, data: rnt_pos }
