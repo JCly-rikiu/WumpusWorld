@@ -5,6 +5,7 @@ import android.Manifest;
 import android.app.Service;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.location.Location;
 import android.location.LocationListener;
@@ -21,12 +22,15 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import com.google.android.gms.drive.realtime.internal.event.ObjectChangedDetails;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
@@ -70,6 +74,11 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     private Vector positions;
     private Position lastPosition;
     private int now_pos, shoot_pos;
+
+    private boolean egg_mode = false;
+    private Vector eggCameras;
+    private Circle eggCircle;
+    private Vector eggLines;
 
     private int arrow = 0;
 
@@ -286,6 +295,11 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         if (nickname == null)
             return;
 
+        if (lastPosition != null)
+            lastPosition.setVisiable(false);
+        findViewById(R.id.go).setEnabled(false);
+        egg_mode = false;
+
         new AsyncTask<Void, Void, JsonObject>() {
             @Override
             protected JsonObject doInBackground(Void... voids) {
@@ -315,8 +329,6 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 switch (status) {
                     case 0:
                         if (positions != null) {
-                            if (lastPosition != null)
-                                lastPosition.setVisiable(false);
                             now_pos = json.get("data").getAsInt();
                             Position p = (Position) positions.get(now_pos);
                             p.setVisiable(true);
@@ -329,12 +341,16 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
                         break;
                     case 1:
-                        if (lastPosition != null)
-                            lastPosition.setVisiable(false);
+                        break;
+                    case 2:
+                        egg_mode = true;
+                        findViewById(R.id.go).setEnabled(true);
                         break;
                 }
             }
         }.execute();
+
+        activate_egg();
     }
 
 
@@ -344,8 +360,8 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             protected JsonObject doInBackground(Void... voids) {
                 OkHttpClient client = new OkHttpClient();
                 Request request = new Request.Builder()
-                                .url(hostname + "init")
-                                .build();
+                        .url(hostname + "init")
+                        .build();
 
                 try {
                     Response response = client.newCall(request).execute();
@@ -505,6 +521,10 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     private void goPosition() {
+        if (egg_mode) {
+            activate_egg();
+            return;
+        }
         new AsyncTask<Void, Void, JsonObject>() {
             @Override
             protected JsonObject doInBackground(Void... voids) {
@@ -533,12 +553,15 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                         redrawPositions(json.getAsJsonArray("data"));
                         break;
                     case 1:
+                        redrawPositions(json.getAsJsonArray("data"));
                         int id = json.get("pos").getAsInt();
                         Position p = (Position) positions.get(id);
                         if (json.get("code").getAsInt() == 0) {
                             p.setWumpus();
+                            showToast(json.get("msg").getAsString());
                         } else {
                             p.setPit();
+                            showToast(json.get("msg").getAsString());
                         }
 
                         findViewById(R.id.go).setEnabled(false);
@@ -575,11 +598,11 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 int status = json.get("status").getAsInt();
                 switch (status) {
                     case 0:
-                        redrawPositions(json.getAsJsonArray("data"));
-                        setArrow(json.get("arrow").getAsInt());
-                        break;
                     case 1:
+                    case 2:
+                        showToast(json.get("msg").getAsString());
                         setArrow(json.get("arrow").getAsInt());
+                        redrawPositions(json.get("data").getAsJsonArray());
                         break;
                 }
             }
@@ -593,6 +616,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         private boolean is_wind = false, is_smell = false, is_goable = false, is_shootable = false;
         private Marker marker;
         private Circle circle;
+        private Vector line = new Vector();
 
         Position(JsonObject json) {
             this.title = json.get("title").getAsString();
@@ -612,8 +636,10 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         private void addCircle() {
             this.circle = mMap.addCircle(new CircleOptions()
                     .center(new LatLng(this.latitude, this.longitude))
-                    .radius(25) // In meters
-                    .visible(false));
+                    .radius(40) // In meters
+                    .visible(false)
+                    .strokeColor(0x7F00FF00)
+                    .fillColor(0x3F00FF00));
         }
 
         public void addLine(JsonObject json) {
@@ -621,9 +647,9 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                 int num = jelement.getAsJsonObject().get("number").getAsInt();
                 Position p = (Position) positions.get(num);
 
-                mMap.addPolyline(new PolylineOptions()
+                line.add(mMap.addPolyline(new PolylineOptions()
                         .add(new LatLng(this.latitude, this.longitude))
-                        .add(new LatLng(p.getLatitude(), p.getLongitude())));
+                        .add(new LatLng(p.getLatitude(), p.getLongitude()))));
             }
         }
 
@@ -691,6 +717,22 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         public void setShootable(boolean value) {
             this.is_shootable = value;
         }
+
+        public void egg_start() {
+            this.marker.setVisible(false);
+            for (Object o: this.line) {
+                Polyline line = (Polyline) o;
+                line.setVisible(false);
+            }
+        }
+
+        public void egg_end() {
+            this.marker.setVisible(true);
+            for (Object o: this.line) {
+                Polyline line = (Polyline) o;
+                line.setVisible(true);
+            }
+        }
     }
 
     private void initPositions(JsonArray jarray) {
@@ -749,5 +791,125 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         arrow = remain;
         Button b = (Button) findViewById(R.id.shoot);
         b.setText("Shoot (" + arrow + ")");
+    }
+
+    private void showToast(String text) {
+        Toast.makeText(this, text, Toast.LENGTH_LONG).show();
+    }
+
+    private void activate_egg() {
+        for (Object o: positions){
+            Position p = (Position) o;
+            p.egg_start();
+        }
+
+        mMap.setMapType(GoogleMap.MAP_TYPE_TERRAIN);
+
+        new AsyncTask<Void, Void, JsonObject>() {
+            @Override
+            protected JsonObject doInBackground(Void... voids) {
+                OkHttpClient client = new OkHttpClient();
+                Request request = new Request.Builder()
+                        .url(hostname + "egg")
+                        .build();
+
+                JsonObject json;
+                try {
+                    Response response = client.newCall(request).execute();
+                    return new JsonParser().parse(response.body().string()).getAsJsonObject();
+                } catch (IOException e) {
+                    return null;
+                }
+            }
+
+            @Override
+            protected void onPostExecute(final JsonObject json) {
+                if (json == null) {
+                    return;
+                }
+
+                eggCameras = new Vector();
+                for (JsonElement jelement: json.get("mac").getAsJsonArray()) {
+                    JsonObject jobject = jelement.getAsJsonObject();
+
+                    LatLng l = new LatLng(jobject.get("latitude").getAsDouble(), jobject.get("longitude").getAsDouble());
+                    mMap.addMarker(new MarkerOptions()
+                            .position(l)
+                            .icon(BitmapDescriptorFactory.fromAsset("logo_mcd.png")));
+
+                    eggCameras.add(new CameraPosition.Builder()
+                            .target(l)      // Sets the center
+                            .zoom(17)       // Sets the zoom
+                            .bearing(jobject.get("bearing").getAsInt())    // Sets the orientation of the camera to east
+                            .tilt(30)       // Sets the tilt of the camera to 30 degrees
+                            .build());       // Creates a CameraPosition from the builder
+                }
+
+                eggLines = new Vector();
+                for (JsonElement jelement: json.get("line").getAsJsonArray()) {
+                    JsonObject jobject = jelement.getAsJsonObject();
+                    JsonObject j1 = jobject.get("p1").getAsJsonObject();
+                    JsonObject j2 = jobject.get("p2").getAsJsonObject();
+
+                    LatLng p1 = new LatLng(j1.get("latitude").getAsDouble(), j1.get("longitude").getAsDouble());
+                    LatLng p2 = new LatLng(j2.get("latitude").getAsDouble(), j2.get("longitude").getAsDouble());
+                    Polyline l = mMap.addPolyline(new PolylineOptions()
+                            .add(p1)
+                            .add(p2));
+                    l.setVisible(false);
+                    eggLines.add(l);
+                }
+
+                JsonObject view = json.get("view").getAsJsonObject();
+                LatLng ec = new LatLng(view.get("latitude").getAsDouble(), view.get("longitude").getAsDouble());
+                eggCameras.add(new CameraPosition.Builder()
+                        .target(ec)
+                        .zoom(16)
+                        .bearing(view.get("bearing").getAsInt())
+                        .tilt(0)
+                        .build());
+                eggCircle = mMap.addCircle(new CircleOptions()
+                        .center(ec)
+                        .radius(330)
+                        .visible(false)
+                        .strokeColor(Color.BLACK)
+                        .fillColor(0x3FFFD700));
+
+                eggCameraCB(0);
+            }
+        }.execute();
+
+//        for (Object o: positions){
+//            Position p = (Position) o;
+//            p.egg_end();
+//        }
+    }
+
+    private void eggCameraCB(final int num) {
+        if (num == eggCameras.size() - 1) {
+            eggCircle.setVisible(true);
+            for (Object o: eggLines) {
+                Polyline line = (Polyline) o;
+                line.setVisible(true);
+            }
+
+            CameraPosition cameraPosition = (CameraPosition) eggCameras.get(num);
+            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 3000, null);
+            return;
+        }
+
+        CameraPosition cameraPosition = (CameraPosition) eggCameras.get(num);
+        mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 3000, new GoogleMap.CancelableCallback() {
+
+            @Override
+            public void onFinish() {
+                eggCameraCB(num + 1);
+            }
+
+            @Override
+            public void onCancel() {
+                eggCameraCB(num + 1);
+            }
+        });
     }
 }

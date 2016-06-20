@@ -70,7 +70,6 @@ module Map_data
       longitude: 121.540133,
       title: '活大',
       connect: [
-        { number: 4 },
         { number: 5 },
         { number: 7 },
         { number: 17 },
@@ -249,25 +248,138 @@ module Map_data
     }
   ]
 
+  @@egg_positions = [
+    {
+      latitude: 25.0175631,
+      longitude: 121.5335128,
+      bearing: 100
+    },
+    {
+      latitude: 25.019726,
+      longitude: 121.536346,
+      bearing: 172
+    },
+    {
+      latitude: 25.0177,
+      longitude: 121.539278,
+      bearing: 244
+    },
+    {
+      latitude: 25.0142847,
+      longitude: 121.5382578,
+      bearing: 316
+    },
+    {
+      latitude: 25.0142002,
+      longitude: 121.534694,
+      bearing: 28
+    }
+  ]
+
+  @@easter_egg = {
+    view: {
+      latitude: 25.016695,
+      longitude: 121.5364179,
+      bearing: 0
+    },
+    mac: @@egg_positions,
+    line: [
+      {
+        p1: @@egg_positions[0],
+        p2: @@egg_positions[1]
+      },
+      {
+        p1: @@egg_positions[1],
+        p2: @@egg_positions[2]
+      },
+      {
+        p1: @@egg_positions[2],
+        p2: @@egg_positions[3]
+      },
+      {
+        p1: @@egg_positions[3],
+        p2: @@egg_positions[4]
+      },
+      {
+        p1: @@egg_positions[4],
+        p2: @@egg_positions[0]
+      },
+      {
+        p1: {
+          latitude: 25.0186445,
+          longitude: 121.5349294
+        },
+        p2: {
+          latitude: 25.018713,
+          longitude: 121.537812
+        }
+      },
+      {
+        p1: {
+          latitude: 25.018713,
+          longitude: 121.537812
+        },
+        p2: {
+          latitude: 25.01599235,
+          longitude: 121.5387679
+        }
+      },
+      {
+        p1: {
+          latitude: 25.01599235,
+          longitude: 121.5387679
+        },
+        p2: {
+          latitude: 25.01424245,
+          longitude: 121.5364759
+        }
+      },
+      {
+        p1: {
+          latitude: 25.01424245,
+          longitude: 121.5364759
+        },
+        p2: {
+          latitude: 25.01588165,
+          longitude: 121.5341034
+        }
+      },
+      {
+        p1: {
+          latitude: 25.01588165,
+          longitude: 121.5341034
+        },
+        p2: {
+          latitude: 25.0186445,
+          longitude: 121.5349294
+        }
+      }
+    ]
+  }
+
   def get_positions
     @@positions
   end
 
-  def parse_states(states)
+  def get_easter_eggs
+    @@easter_egg
+  end
+
+  def parse_state(state)
     rnt = []
 
     num = -1
-    states.length.times do
+    state.length.times do
       num += 1
-      char = states[num]
+      char = state[num]
 
       checked = (char == '1' ? true : false)
       current = (char == 'C' ? true : false)
 
-      wind = checked || current ? check_wind(num, states) : false
-      smell = checked || current ? check_smell(num, states) : false
-      go = checked || current ? true : check_go(num, states)
-      shoot = checked || current ? false : check_shoot(num, states)
+      wind = checked || current ? check_wind(num, state) : false
+      smell = checked || current ? check_smell(num, state) : false
+      go = checked || current ? true : check_go(num, state)
+      shoot = checked || current ? false : check_shoot(num, state)
 
       rnt.push({ is_checked: checked, is_current: current, is_wind: wind, is_smell: smell, can_go: go, can_shoot: shoot })
     end
@@ -275,35 +387,45 @@ module Map_data
     rnt
   end
 
-  def check_wind(num, states)
+  def check_wind(num, state)
     get_positions[num][:connect].each do |num|
-      return true if states[num[:number]] == 'P'
+      return true if state[num[:number]] == 'P'
     end
 
     false
   end
 
-  def check_smell(num, states)
+  def check_smell(num, state)
     get_positions[num][:connect].each do |num|
-      return true if states[num[:number]] == 'W'
+      return true if state[num[:number]] == 'W'
     end
 
     false
   end
 
-  def check_go(num, states)
+  def check_go(num, state)
     get_positions[num][:connect].each do |num|
-      return true if states[num[:number]] == '1'
+      return true if state[num[:number]] == '1'
     end
 
     false
   end
 
-  def check_shoot(num, states)
+  def check_shoot(num, state)
     get_positions[num][:connect].each do |num|
-      return true if states[num[:number]] == 'C'
+      return true if state[num[:number]] == 'C'
     end
 
     false
+  end
+
+  def check_for_win(state)
+    num = -1
+    state.length.times do
+      num += 1
+      return false if state[num] == 'W'
+    end
+
+    true
   end
 end

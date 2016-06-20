@@ -18,21 +18,37 @@ class LocationController < ApplicationController
     least_distance = 1000000
     rnt_pos = -1
     cnt = -1
-
     get_positions.each do |pos|
       distance = cal_distance(latitude, pos[:latitude], longitude, pos[:longitude])
 
       cnt += 1
 
-      next if distance > 0.00125
+      next if distance > 0.0005
       if distance < least_distance
         least_distance = distance
         rnt_pos = cnt
       end
     end
 
+    least_distance = 1000000
+    egg_pos = -1
+    cnt = -1
+    get_easter_eggs do |pos|
+      distance = cal_distance(latitude, pos[:latitude], longitude, pos[:longitude])
+
+      next if distance > 0.0005
+      if distance < least_distance
+        least_distance = distance
+        egg_pos = cnt
+      end
+    end
+
     if rnt_pos == -1
-      render json: { status: 1 }
+      if egg_pos == -1
+        render json: { status: 1 }
+      else
+        render json: { status: 2 }
+      end
     else
       render json: { status: 0, data: rnt_pos }
     end
@@ -58,17 +74,15 @@ class LocationController < ApplicationController
       end
 
       if state[pos] == 'W'
-        state[pos] = 'w'
         player.update(is_playing: false, state: state)
-        render json: { status: 1, pos: pos, code: 0, msg: "You're eaten." }
+        render json: { status: 1, data: parse_state(player.state), pos: pos, code: 0, msg: "You're eaten." }
       elsif state[pos] == 'P'
-        state[pos] = 'p'
         player.update(is_playing: false, state: state)
-        render json: { status: 1, pos: pos, code: 1, msg: "You fell down." }
+        render json: { status: 1, data: parse_state(player.state), pos: pos, code: 1, msg: 'You fell down.' }
       else
         state[pos] = 'C'
         player.update(state: state)
-        render json: { status: 0, data: parse_states(player.state) }
+        render json: { status: 0, data: parse_state(player.state) }
       end
     else
       render json: { status: 2 }
@@ -89,11 +103,19 @@ class LocationController < ApplicationController
 
         player.update(state: state)
 
-        render json: { status: 0, data: parse_states(player.state), arrow: player.arrow }
+        if check_for_win(player.state)
+          render json: {status: 2, data: parse_state(player.state), arrow: player.arrow, msg: 'You win!!' }
+        else
+          render json: { status: 0, data: parse_state(player.state), arrow: player.arrow, msg: 'You heard a scream.' }
+        end
       else
-        render json: { status: 1, data: parse_states(player.state), arrow: player.arrow }
+        render json: { status: 1, data: parse_state(player.state), arrow: player.arrow, msg: 'Nothing happens...' }
       end
     end
+  end
+
+  def egg
+    render json: get_easter_eggs
   end
 
   private

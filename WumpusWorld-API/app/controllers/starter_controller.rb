@@ -11,7 +11,7 @@ class StarterController < ApplicationController
 
     if Player.exists?(name: nickname)
       player = Player.find_by_name(nickname)
-      render json: { status: 0, data: parse_states(player.state), arrow: player.arrow }
+      render json: { status: 0, data: parse_state(player.state), arrow: player.arrow }
     else
       render json: { status: 1 }
     end
@@ -22,10 +22,10 @@ class StarterController < ApplicationController
     if Player.exists?(name: nickname)
       player = Player.find_by_name(nickname)
       player.update(is_playing: true, state: create_new_game, arrow: 3)
-      render json: { status: 0, data: parse_states(player.state) }
+      render json: { status: 0, data: parse_state(player.state) }
     else
       player = Player.create(name: nickname, is_playing: true, state: create_new_game, arrow: 3)
-      render json: { status: 0, data: parse_states(player.state) }
+      render json: { status: 0, data: parse_state(player.state) }
     end
   end
 
